@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Spirals - Interactive Visual Art</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap');
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background: radial-gradient(ellipse at center, #1a0033 0%, #000000 70%);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            cursor: none;
+        }
+
+        canvas {
+            display: block;
+            background: transparent;
+        }
+
+        .info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ffffff;
+            font-size: 16px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            z-index: 100;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
+        .info:hover {
+            opacity: 1;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #ffffff;
+            font-size: 14px;
+            opacity: 0.7;
+            z-index: 100;
+        }
+
+        .cursor {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1000;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+            transition: all 0.1s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <div>Cosmic Spirals</div>
+        <div>Interactive Visual Art</div>
+    </div>
+    
+    <div class="controls">
+        Move mouse to paint spirals • Click to energize • Hold shift for chaos mode • Spirals follow your every move!
+    </div>
+    
+    <div class="cursor" id="cursor"></div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const cursor = document.getElementById('cursor');
+        
+        // Set canvas size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Mouse tracking
+        let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+        let mouseSpeed = 0;
+        let lastMouse = { x: mouse.x, y: mouse.y };
+        let isClicking = false;
+        let shiftPressed = false;
+
+        document.addEventListener('mousemove', (e) => {
+            lastMouse = { x: mouse.x, y: mouse.y };
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            
+            // Calculate mouse speed
+            mouseSpeed = Math.sqrt(
+                Math.pow(mouse.x - lastMouse.x, 2) + 
+                Math.pow(mouse.y - lastMouse.y, 2)
+            );
+            
+            // Update custom cursor
+            cursor.style.left = (mouse.x - 10) + 'px';
+            cursor.style.top = (mouse.y - 10) + 'px';
+            cursor.style.transform = `scale(${1 + mouseSpeed * 0.05})`;
+        });
+
+        document.addEventListener('mousedown', () => { isClicking = true; });
+        document.addEventListener('mouseup', () => { isClicking = false; });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Shift') shiftPressed = true; });
+        document.addEventListener('keyup', (e) => { if (e.key === 'Shift') shiftPressed = false; });
+
+        // Spiral class
+        class Spiral {
+            constructor(index) {
+                this.index = index;
+                this.angle = 0;
+                this.radius = 0;
+                this.maxRadius = 400;
+                this.speed = 0.02 + index * 0.005;
+                this.radiusGrowth = 0.8;
+                this.points = [];
+                this.hue = (index * 60) % 360;
+                this.opacity = 0.8;
+                this.arms = 3 + index;
+                this.pulsePhase = index * Math.PI / 3;
+                this.offsetAngle = index * Math.PI / 6;
+            }
+
+            update() {
+                const time = Date.now() * 0.001;
+                
+                // Spirals center directly on mouse position
+                const centerX = mouse.x;
+                const centerY = mouse.y;
+                
+                // Mouse speed affects everything
+                const speedMultiplier = 1 + mouseSpeed * 0.05;
+                
+                // Dynamic speed based on mouse movement
+                const dynamicSpeed = this.speed * speedMultiplier;
+                
+                // Chaos mode
+                if (shiftPressed) {
+                    this.speed *= 1.02;
+                    this.radiusGrowth *= 1.01;
+                }
+                
+                // Click energy - makes spirals expand rapidly
+                if (isClicking) {
+                    this.radiusGrowth *= 1.1;
+                    this.speed *= 1.2;
+                }
+                
+                this.angle += dynamicSpeed;
+                
+                // Pulsing effect based on mouse speed
+                const pulse = Math.sin(time * 3 + this.pulsePhase) * 0.2 + 1 + mouseSpeed * 0.02;
+                
+                // Create spiral arms directly from mouse position
+                for (let arm = 0; arm < this.arms; arm++) {
+                    const armAngle = this.angle + (arm * Math.PI * 2 / this.arms) + this.offsetAngle;
+                    
+                    // Logarithmic spiral formula - grows from mouse position
+                    const spiralRadius = this.radius * Math.exp(armAngle * 0.08) * pulse;
+                    
+                    if (spiralRadius < this.maxRadius) {
+                        const x = centerX + Math.cos(armAngle) * spiralRadius;
+                        const y = centerY + Math.sin(armAngle) * spiralRadius;
+                        
+                        // Color shifts based on mouse position and movement
+                        const colorShift = (armAngle * 50 + time * 100 + mouse.x * 0.5) % 360;
+                        const hue = (this.hue + colorShift) % 360;
+                        
+                        // Size and opacity affected by mouse speed
+                        const size = 2 + mouseSpeed * 0.3 + pulse * 1.5;
+                        const opacity = this.opacity * (1 - spiralRadius / this.maxRadius) * (0.5 + mouseSpeed * 0.05);
+                        
+                        this.points.push({
+                            x: x,
+                            y: y,
+                            hue: hue,
+                            opacity: opacity,
+                            size: size,
+                            life: 60 + mouseSpeed * 2
+                        });
+                    }
+                }
+                
+                this.radius += this.radiusGrowth * (1 + mouseSpeed * 0.02);
+                
+                // Reset when spiral gets too big
+                if (this.radius > this.maxRadius) {
+                    this.radius = 0;
+                    this.angle = Math.random() * Math.PI * 2; // Random start angle for variety
+                    this.speed = 0.02 + this.index * 0.005;
+                    this.radiusGrowth = 0.8;
+                }
+                
+                // Update points (fade them out faster when mouse is moving)
+                const fadeSpeed = 0.98 - mouseSpeed * 0.002;
+                this.points = this.points.filter(point => {
+                    point.life--;
+                    point.opacity *= fadeSpeed;
+                    return point.life > 0 && point.opacity > 0.01;
+                });
+            }
+
+            draw() {
+                // Draw glowing trails
+                this.points.forEach((point, i) => {
+                    const alpha = point.opacity;
+                    
+                    // Create glow effect
+                    const gradient = ctx.createRadialGradient(
+                        point.x, point.y, 0,
+                        point.x, point.y, point.size * 3
+                    );
+                    
+                    gradient.addColorStop(0, `hsla(${point.hue}, 100%, 70%, ${alpha})`);
+                    gradient.addColorStop(0.5, `hsla(${point.hue}, 100%, 50%, ${alpha * 0.5})`);
+                    gradient.addColorStop(1, `hsla(${point.hue}, 100%, 30%, 0)`);
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, point.size * 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Core bright point
+                    ctx.fillStyle = `hsla(${point.hue}, 100%, 90%, ${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, point.size * 0.5, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                
+                // Connect points with glowing lines
+                if (this.points.length > 1) {
+                    ctx.strokeStyle = `hsla(${this.hue}, 80%, 60%, 0.3)`;
+                    ctx.lineWidth = 1;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = `hsl(${this.hue}, 100%, 70%)`;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(this.points[0].x, this.points[0].y);
+                    for (let i = 1; i < this.points.length; i++) {
+                        ctx.lineTo(this.points[i].x, this.points[i].y);
+                    }
+                    ctx.stroke();
+                    
+                    ctx.shadowBlur = 0;
+                }
+            }
+        }
+
+        // Create multiple spirals
+        const spirals = [];
+        const numSpirals = 5;
+        
+        function createSpirals() {
+            spirals.length = 0;
+            for (let i = 0; i < numSpirals; i++) {
+                spirals.push(new Spiral(i));
+            }
+        }
+        createSpirals();
+
+        // Background stars
+        const stars = [];
+        for (let i = 0; i < 200; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2,
+                opacity: Math.random() * 0.8,
+                twinkleSpeed: Math.random() * 0.02 + 0.005
+            });
+        }
+
+        function drawStars() {
+            const time = Date.now() * 0.001;
+            stars.forEach(star => {
+                const twinkle = Math.sin(time * star.twinkleSpeed) * 0.5 + 0.5;
+                const alpha = star.opacity * twinkle;
+                
+                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // Animation loop
+        function animate() {
+            // Create trailing effect instead of clearing completely
+            ctx.fillStyle = 'rgba(26, 0, 51, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw twinkling stars
+            drawStars();
+            
+            // Update and draw spirals
+            spirals.forEach(spiral => {
+                spiral.update();
+                spiral.draw();
+            });
+            
+            // Draw mouse influence circle
+            if (mouseSpeed > 1) {
+                const gradient = ctx.createRadialGradient(
+                    mouse.x, mouse.y, 0,
+                    mouse.x, mouse.y, 50 + mouseSpeed * 2
+                );
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 0.1)');
+                gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(mouse.x, mouse.y, 50 + mouseSpeed * 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            requestAnimationFrame(animate);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            // Recreate stars for new canvas size
+            stars.length = 0;
+            for (let i = 0; i < 200; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2,
+                    opacity: Math.random() * 0.8,
+                    twinkleSpeed: Math.random() * 0.02 + 0.005
+                });
+            }
+            createSpirals();
+        });
+
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>
